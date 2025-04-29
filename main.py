@@ -6,13 +6,13 @@ from telegram.error import TelegramError
 import logging
 import re
 
-# === CONFIGURATION PERSONNELLE ===
+# === CONFIGURATION ===
 TELEGRAM_TOKEN = "8036416560:AAETLYeBRZe8w0bfpJujLNnJgG--kJqnsK8"
 TELEGRAM_CHAT_ID = "5249034734"
 RSS_FEED_URL = "https://rss.app/feeds/2eXUg2P9zvxO6Hym.xml"
-CHECK_INTERVAL = 120  # toutes les 2 minutes
+CHECK_INTERVAL = 30  # vérifie toutes les 30 secondes
 
-# === LOGGING (utile pour débogage) ===
+# === INITIALISATION ===
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -31,39 +31,42 @@ def fetch_latest_entry():
     try:
         feed = feedparser.parse(RSS_FEED_URL)
         if not feed.entries:
-            logger.info("Aucun article trouvé dans le flux.")
+            logger.info("Aucun article trouvé.")
             return None
         return feed.entries[0]
     except Exception as e:
-        logger.error(f"Erreur lors de la récupération du flux : {str(e)}")
+        logger.error(f"Erreur lors du parsing RSS : {str(e)}")
         return None
 
 def extract_image(summary_html):
-    match = re.search(r'<img[^>]+src="([^"]+)"', summary_html)
-    if match:
-        return match.group(1)
-    return None
+    try:
+        matches = re.findall(r'<img[^>]+src="([^"]+)"', summary_html)
+        for url in matches:
+            if any(url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                return url
+        return None
+    except Exception as e:
+        logger.warning(f"Erreur extraction image : {str(e)}")
+        return None
 
 def process_entry(entry):
     global last_entry_id
 
     entry_id = entry.get('id', entry.link)
     if entry_id == last_entry_id:
-        logger.debug("Article déjà traité.")
         return False
 
     try:
         title_fr = translator.translate(entry.title, dest='fr').text
         summary = entry.get('summary', '')
-        summary_fr = translator.translate(summary, dest='fr').text if summary else "Pas de résumé disponible."
+        summary_fr = translator.translate(summary, dest='fr').text if summary else ""
 
         image_url = extract_image(summary)
 
         message = (
-            f"✨ *NOUVEL ARTICLE* ✨\n\n"
-            f"📌 *{title_fr}*\n\n"
-            f"📝 {summary_fr}\n\n"
-            f"🔗 [Lire l'article original]({entry.link})"
+            f"*{title_fr}*\n"
+            f"{summary_fr}\n\n"
+            f"🔗 [Lire l’article original]({entry.link})"
         )
 
         if image_url:
@@ -81,18 +84,18 @@ def process_entry(entry):
                 disable_web_page_preview=False
             )
 
-        logger.info(f"✅ Article envoyé : {title_fr[:60]}...")
+        logger.info(f"✅ Article publié : {title_fr[:60]}...")
         last_entry_id = entry_id
         return True
 
     except TelegramError as te:
         logger.error(f"Erreur Telegram : {str(te)}")
     except Exception as e:
-        logger.error(f"Erreur de traitement de l'article : {str(e)}")
+        logger.error(f"Erreur traitement article : {str(e)}")
     return False
 
 def main_loop():
-    logger.info("🤖 Bot en marche, vérifie toutes les 2 minutes...")
+    logger.info("🤖 Bot démarré. Vérifications toutes les 30 secondes.")
     while True:
         try:
             start_time = time.time()
@@ -102,7 +105,7 @@ def main_loop():
             elapsed = time.time() - start_time
             time.sleep(max(0, CHECK_INTERVAL - elapsed))
         except KeyboardInterrupt:
-            logger.info("⛔ Arrêt manuel du bot.")
+            logger.info("⛔ Bot arrêté manuellement.")
             break
         except Exception as e:
             logger.critical(f"Erreur critique : {str(e)}")
