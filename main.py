@@ -5,6 +5,8 @@ from telegram import Bot
 from telegram.error import TelegramError
 import logging
 import re
+from html import unescape
+from bs4 import BeautifulSoup
 
 # === CONFIGURATION ===
 TELEGRAM_TOKEN = "8036416560:AAETLYeBRZe8w0bfpJujLNnJgG--kJqnsK8"
@@ -49,6 +51,13 @@ def extract_image(summary_html):
         logger.warning(f"Erreur extraction image : {str(e)}")
         return None
 
+def clean_html(html_text):
+    try:
+        soup = BeautifulSoup(html_text, 'html.parser')
+        return unescape(soup.get_text().strip())
+    except Exception:
+        return html_text  # en cas d'erreur, retourner brut
+
 def process_entry(entry):
     global last_entry_id
 
@@ -58,10 +67,10 @@ def process_entry(entry):
 
     try:
         title_fr = translator.translate(entry.title, dest='fr').text
-        summary = entry.get('summary', '')
+        summary = clean_html(entry.get('summary', ''))
         summary_fr = translator.translate(summary, dest='fr').text if summary else ""
 
-        image_url = extract_image(summary)
+        image_url = extract_image(entry.get('summary', ''))
 
         message = (
             f"*{title_fr}*\n"
