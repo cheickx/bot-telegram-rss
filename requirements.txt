@@ -1,4 +1,5 @@
-python-telegram-bot==13.15
 feedparser
-googletrans==4.0.0-rc1
 beautifulsoup4
+googletrans==4.0.0-rc1
+python-telegram-bot==13.15
+requests
